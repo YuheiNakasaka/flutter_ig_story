@@ -1,39 +1,30 @@
-# ig_story
+import 'package:flutter/material.dart';
+import 'package:ig_story/ig_story.dart';
 
-A player widget to implement Stories like Instagram.
+void main() {
+  runApp(MyApp());
+}
 
-![ovlabfubvu_res](https://user-images.githubusercontent.com/1421093/95854032-50167480-0d91-11eb-9b75-8600d084040f.gif)
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'My Story Demo',
+      theme: ThemeData(
+        primaryColor: Colors.green,
+      ),
+      home: Home(),
+      debugShowCheckedModeBanner: false,
+    );
+  }
+}
 
-# Installation
-
-To use this plugin, add `ig_story` as a [dependency in your pubspec.yaml file](https://flutter.io/platform-plugins/).
-
-# Usage
-Import the package into your code
-
-```dart
-import "package:ig_story/ig_story.dart";
-```
-
-## Basics
-1. Create widgets which you want to display.
-2. Wrap each of them with `IgChild`.
-3. Pass the IgChilds to `IgStory`. That's it.
-
-## Advanced
-If you display something which takes long time to load like image and video,
-you need to use `IgManager` to control the story's animation. In detail, see the below example.
-
-# Example
-
-```dart
 class Home extends StatefulWidget {
   @override
   _HomeState createState() => _HomeState();
 }
 
 class _HomeState extends State<Home> {
-  // Manager to control animation.
   IgManager manager = IgManager();
 
   @override
@@ -42,11 +33,7 @@ class _HomeState extends State<Home> {
       backgroundColor: Colors.black,
       body: IgStory(
         children: [
-          // Basic Widget
           IgChild(
-            // Optional
-            duration: Duration(seconds: 2),
-            // Required: Any widget can be set.
             child: Container(
               color: Colors.red,
               child: Center(
@@ -58,6 +45,7 @@ class _HomeState extends State<Home> {
             ),
           ),
           IgChild(
+            duration: Duration(seconds: 2),
             child: Container(
               color: Colors.green,
               child: Center(
@@ -68,14 +56,12 @@ class _HomeState extends State<Home> {
               ),
             ),
           ),
-          // Advanced usage
-          // After finished loading, trigger story animations.
           IgChild(
             manager: manager,
             child: Container(
               width: double.infinity,
               height: double.infinity,
-              child: MyImageLoader(
+              child: LoadedImage(
                 manager: manager,
               ),
             ),
@@ -84,19 +70,25 @@ class _HomeState extends State<Home> {
         onCompleted: () {
           print('All stories completed.');
         },
-        auto: true, // Optional. Default: true.
+        auto: true,
       ),
     );
   }
+
+  @override
+  void dispose() {
+    manager.controller.close();
+    super.dispose();
+  }
 }
 
-class MyImageLoader extends StatefulWidget {
+class LoadedImage extends StatefulWidget {
   final IgManager manager;
-  MyImageLoader({@required this.manager});
-  State createState() => new MyImageLoaderState();
+  LoadedImage({@required this.manager});
+  State createState() => new LoadedImageState();
 }
 
-class MyImageLoaderState extends State<MyImageLoader> {
+class LoadedImageState extends State<LoadedImage> {
   Image _image = new Image.network(
     'https://img.gifmagazine.net/gifmagazine/images/4407234/original.gif',
     fit: BoxFit.cover,
@@ -110,7 +102,6 @@ class MyImageLoaderState extends State<MyImageLoader> {
         .resolve(ImageConfiguration())
         .addListener(ImageStreamListener((ImageInfo info, bool syncCall) {
       if (mounted) {
-        // Calls play() method after finished loading all image data.
         widget.manager.play();
         setState(() {
           _loading = false;
@@ -127,11 +118,9 @@ class MyImageLoaderState extends State<MyImageLoader> {
         body: Container(
           width: double.infinity,
           height: double.infinity,
-          child: _loading ? new Text('Loading...') : _image,
+          child: _loading ? Center(child: Text('Loading...')) : _image,
         ),
       ),
     );
   }
 }
-```
-
