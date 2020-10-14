@@ -1,5 +1,3 @@
-library ig_story;
-
 import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
@@ -22,6 +20,7 @@ import 'package:flutter/material.dart';
 ///     return Scaffold(
 ///       backgroundColor: Colors.black,
 ///       body: IgStory(
+///         manager: manager,
 ///         children: [
 ///           IgChild(
 ///             duration: Duration(seconds: 2),
@@ -43,10 +42,6 @@ import 'package:flutter/material.dart';
 ///             ),
 ///           ),
 ///         ],
-///         onCompleted: () {
-///           print('All stories completed.');
-///         },
-///         auto: true,
 ///       ),
 ///     );
 ///   }
@@ -100,16 +95,14 @@ import 'package:flutter/material.dart';
 class IgStory extends StatefulWidget {
   final List<IgChild> children;
   final bool auto;
-  final VoidCallback onCompleted;
   final IgManager manager;
 
   IgStory({
     Key key,
     @required this.children,
-    this.onCompleted,
+    @required this.manager,
     this.auto = true,
-    this.manager,
-  })  : assert(children.isEmpty),
+  })  : assert(children.isNotEmpty),
         super(key: key);
 
   _IgStoryState createState() => _IgStoryState();
@@ -124,7 +117,6 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
   double _progressValue = 0.0;
   Duration _duration;
   Duration _pageSpeed = const Duration(milliseconds: 1); // almost no animation
-  bool _noAnimation = false;
 
   @override
   void initState() {
@@ -163,7 +155,6 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
         Tween(begin: 0.0, end: 1.0).animate(_animationController)
           ..addListener(
             () {
-              _noAnimation = false;
               setState(() {
                 _progressValue = _currentAnimation.value;
               });
@@ -175,32 +166,36 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
             }
           });
 
-    if (child.manager != null) {
-      if (!child.manager.controller.hasListener) {
-        child.manager.controller.stream.listen((IgPlayState event) {
-          if (event == IgPlayState.play) {
-            _animationController.forward();
+    widget.manager.controller.stream.listen((IgPlayState event) {
+      switch (event) {
+        case IgPlayState.play:
+          _animationController.forward();
+          break;
+        case IgPlayState.pageChanged:
+          for (int i = 0; i < widget.children.length; i++) {
+            widget.children[i].shown = false;
           }
-        });
+          break;
+        default:
       }
-    } else {
-      _animationController.forward();
-    }
+    });
+    widget.manager.controller.sink.add(IgPlayState.play);
   }
 
   void _next() {
-    _noAnimation = true;
     if (widget.children.length - 1 > _controller.page.toInt()) {
       _duration = widget.children[_pageNotifier.value.toInt() + 1].duration ??
           Duration(seconds: 3);
-      _controller.nextPage(duration: _pageSpeed, curve: Curves.linear);
+      _controller.nextPage(
+        duration: _pageSpeed,
+        curve: Curves.linear,
+      );
     } else {
-      if (widget.onCompleted != null) widget.onCompleted();
+      widget.manager.controller.sink.add(IgPlayState.next);
     }
   }
 
   void _back() {
-    _noAnimation = true;
     if (_controller.page.toInt() > 0) {
       _pageNotifier.value -= 1.0;
       _duration = widget.children[_pageNotifier.value.toInt()].duration ??
@@ -210,7 +205,7 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
         curve: Curves.linear,
       );
     } else {
-      print('No stories behind it');
+      widget.manager.controller.sink.add(IgPlayState.back);
     }
   }
 
@@ -224,13 +219,7 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
             controller: _controller,
             itemCount: widget.children.length,
             itemBuilder: (_, index) {
-              return _noAnimation
-                  ? widget.children[index].getWidget()
-                  : CubeWidget(
-                      child: widget.children[index].getWidget(),
-                      index: index,
-                      pageNotifier: value,
-                    );
+              return widget.children[index].getWidget();
             },
             onPageChanged: (idx) {
               _progressValue = 0;
@@ -243,6 +232,7 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
               }
               _play();
             },
+            physics: const NeverScrollableScrollPhysics(),
           ),
           SafeArea(
             child: Padding(
@@ -304,29 +294,197 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
   }
 }
 
-class IgChild {
-  final Widget child;
-  final Duration duration;
+/// IgStory wrapper
+///
+/// ```dart
+/// class Home extends StatefulWidget {
+///   @override
+///   _HomeState createState() => _HomeState();
+/// }
+/// class _HomeState extends State<Home> {
+///   IgManager manager = IgManager();
+///   @override
+///   Widget build(BuildContext context) {
+///     return Scaffold(
+///       backgroundColor: Colors.black,
+///       body: IgStories(
+///         manager: manager,
+///         children: [
+///           IgStory(
+///             manager: manager,
+///             children: [
+///               IgChild(
+///                 child: Container(
+///                   color: Colors.red,
+///                   child: Center(
+///                     child: Text(
+///                       'first page',
+///                       style:
+///                           TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
+///                     ),
+///                   ),
+///                 ),
+///               ),
+///               IgChild(
+///                 duration: Duration(seconds: 2),
+///                 child: Container(
+///                   color: Colors.green,
+///                   child: Center(
+///                     child: Text(
+///                       'second page',
+///                       style:
+///                           TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
+///                     ),
+///                   ),
+///                 ),
+///               ),
+///               IgChild(
+///                 child: Container(
+///                   width: double.infinity,
+///                   height: double.infinity,
+///                   child: LoadedImage(
+///                     manager: manager,
+///                     url:
+///                         "https://img.gifmagazine.net/gifmagazine/images/4407234/medium_thumb.png",
+///                   ),
+///                 ),
+///               ),
+///             ],
+///           ),
+///           IgStory(
+///             manager: manager,
+///             children: [
+///               IgChild(
+///                 child: Container(
+///                   color: Colors.blue,
+///                   child: Center(
+///                     child: Text(
+///                       'first page',
+///                       style:
+///                           TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
+///                     ),
+///                   ),
+///                 ),
+///               ),
+///               IgChild(
+///                 child: Container(
+///                   width: double.infinity,
+///                   height: double.infinity,
+///                   child: LoadedImage(
+///                     manager: manager,
+///                     url:
+///                         "https://img.gifmagazine.net/gifmagazine/images/4381451/medium_thumb.png",
+///                   ),
+///                 ),
+///               ),
+///             ],
+///           )
+///         ],
+///       ),
+///     );
+///   }
+///   @override
+///   void dispose() {
+///     manager.controller.close();
+///     super.dispose();
+///   }
+/// }
+/// ```
+class IgStories extends StatefulWidget {
+  final List<IgStory> children;
   final IgManager manager;
 
-  bool shown = false;
+  IgStories({
+    Key key,
+    @required this.children,
+    @required this.manager,
+  })  : assert(children.isNotEmpty),
+        super(key: key);
 
-  IgChild({@required child, this.duration, this.manager})
-      : this.child = SizedBox(
-          key: UniqueKey(),
-          child: child,
-        );
+  @override
+  _IgStoriesState createState() => _IgStoriesState();
+}
 
-  Widget getWidget() {
-    return child;
+class _IgStoriesState extends State<IgStories> {
+  PageController _controller = PageController();
+  ValueNotifier<double> _pageNotifier = ValueNotifier(0.0);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller.addListener(_listener);
+    });
+    if (widget.manager != null) {
+      if (!widget.manager.controller.hasListener) {
+        widget.manager.controller.stream.listen((IgPlayState event) {
+          switch (event) {
+            case IgPlayState.next:
+              _controller.nextPage(
+                duration: Duration(milliseconds: 400),
+                curve: Curves.easeInOut,
+              );
+              break;
+            case IgPlayState.back:
+              _controller.previousPage(
+                duration: Duration(milliseconds: 400),
+                curve: Curves.easeInOut,
+              );
+              break;
+            default:
+          }
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_listener);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _listener() {
+    _pageNotifier.value = _controller.page;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _pageNotifier,
+      builder: (_, value, child) => Container(
+        child: PageView.builder(
+          controller: _controller,
+          itemCount: widget.children.length,
+          itemBuilder: (_, index) {
+            return CubeWidget(
+              child: widget.children[index],
+              index: index,
+              pageNotifier: value,
+            );
+          },
+          onPageChanged: (e) {
+            widget.manager.controller.sink.add(IgPlayState.pageChanged);
+          },
+        ),
+      ),
+    );
   }
 }
 
-enum IgPlayState { play, pause, stop }
+enum IgPlayState {
+  play,
+  pause,
+  stop,
+  next,
+  back,
+  pageChanged,
+}
 
 class IgManager {
   final StreamController<IgPlayState> controller;
-  IgManager() : this.controller = StreamController<IgPlayState>();
+  IgManager() : this.controller = StreamController<IgPlayState>.broadcast();
 
   void play() {
     controller.sink.add(IgPlayState.play);
@@ -338,6 +496,35 @@ class IgManager {
 
   void stop() {
     controller.sink.add(IgPlayState.stop);
+  }
+
+  void next() {
+    controller.sink.add(IgPlayState.next);
+  }
+
+  void back() {
+    controller.sink.add(IgPlayState.back);
+  }
+
+  void pageChanged() {
+    controller.sink.add(IgPlayState.pageChanged);
+  }
+}
+
+class IgChild {
+  final Widget child;
+  final Duration duration;
+
+  bool shown = false;
+
+  IgChild({@required child, this.duration})
+      : this.child = SizedBox(
+          key: UniqueKey(),
+          child: child,
+        );
+
+  Widget getWidget() {
+    return child;
   }
 }
 
@@ -361,7 +548,7 @@ class CubeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLeaving = (index - pageNotifier) <= 0;
+    final isLeaving = (index - pageNotifier) < 0;
     final t = (index - pageNotifier);
     final rotationY = lerpDouble(0, 45, t);
     final opacity = lerpDouble(0, 1, t.abs()).clamp(0.0, 1.0);
@@ -372,19 +559,23 @@ class CubeWidget extends StatelessWidget {
       alignment: isLeaving ? Alignment.centerRight : Alignment.centerLeft,
       transform: transform,
       child: Stack(
-        children: [
-          child,
-          Positioned.fill(
-            child: Opacity(
-              opacity: opacity,
-              child: Container(
-                child: Container(
-                  color: Colors.black87,
+        // Without this condition,
+        // child's onTap() can't be called.
+        children: isLeaving
+            ? [
+                child,
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: opacity,
+                    child: Container(
+                      child: Container(
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ),
-        ],
+              ]
+            : [child],
       ),
     );
   }

@@ -32,6 +32,7 @@ class _HomeState extends State<Home> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: IgStory(
+        manager: manager,
         children: [
           IgChild(
             child: Container(
@@ -57,7 +58,6 @@ class _HomeState extends State<Home> {
             ),
           ),
           IgChild(
-            manager: manager,
             child: Container(
               width: double.infinity,
               height: double.infinity,
@@ -67,9 +67,6 @@ class _HomeState extends State<Home> {
             ),
           ),
         ],
-        onCompleted: () {
-          print('All stories completed.');
-        },
         auto: true,
       ),
     );
