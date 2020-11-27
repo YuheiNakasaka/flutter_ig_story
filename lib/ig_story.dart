@@ -93,30 +93,37 @@ import 'package:flutter/material.dart';
 /// }
 /// ```
 class IgStory extends StatefulWidget {
-  final List<IgChild> children;
-  final bool auto;
-  final IgManager manager;
-
   IgStory({
     Key key,
     @required this.children,
     @required this.manager,
     this.auto = true,
+    this.enablelLeftBack = true,
+    this.enablelRightNext = true,
+    this.showProgressBar = true,
   })  : assert(children.isNotEmpty),
         super(key: key);
 
+  final List<IgChild> children;
+  final IgManager manager;
+  final bool auto;
+  final bool enablelLeftBack;
+  final bool enablelRightNext;
+  final bool showProgressBar;
+
+  @override
   _IgStoryState createState() => _IgStoryState();
 }
 
 class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
-  PageController _controller = PageController();
+  final PageController _controller = PageController();
   AnimationController _animationController;
   Animation<double> _currentAnimation;
-  ValueNotifier<double> _pageNotifier = ValueNotifier(0.0);
-  Timer _timer;
+  final ValueNotifier<double> _pageNotifier = ValueNotifier(0.0);
   double _progressValue = 0.0;
   Duration _duration;
-  Duration _pageSpeed = const Duration(milliseconds: 1); // almost no animation
+  // almost no animation
+  final Duration _pageSpeed = const Duration(milliseconds: 1);
 
   @override
   void initState() {
@@ -129,7 +136,6 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _timer?.cancel();
     _animationController?.dispose();
     _controller.removeListener(_listener);
     _controller.dispose();
@@ -143,11 +149,9 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
   void _play() {
     _animationController?.dispose();
 
-    IgChild child = widget.children[_pageNotifier.value.toInt()];
+    final child = widget.children[_pageNotifier.value.toInt()];
 
-    if (_duration == null) {
-      _duration = child.duration ?? Duration(seconds: 3);
-    }
+    _duration = child.duration ?? const Duration(seconds: 6);
 
     _animationController =
         AnimationController(duration: _duration, vsync: this);
@@ -169,11 +173,24 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
     widget.manager.controller.stream.listen((IgPlayState event) {
       switch (event) {
         case IgPlayState.play:
-          _animationController.forward();
+          if (!_animationController
+                  .toStringDetails()
+                  .contains(RegExp(r'DISPOSED')) &&
+              !_animationController.isAnimating) {
+            _animationController.forward();
+          }
           break;
         case IgPlayState.pageChanged:
-          for (int i = 0; i < widget.children.length; i++) {
+          for (var i = 0; i < widget.children.length; i++) {
             widget.children[i].shown = false;
+          }
+          break;
+        case IgPlayState.pause:
+          if (!_animationController
+                  .toStringDetails()
+                  .contains(RegExp(r'DISPOSED')) &&
+              _animationController.isAnimating) {
+            _animationController.stop();
           }
           break;
         default:
@@ -185,7 +202,7 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
   void _next() {
     if (widget.children.length - 1 > _controller.page.toInt()) {
       _duration = widget.children[_pageNotifier.value.toInt() + 1].duration ??
-          Duration(seconds: 3);
+          const Duration(seconds: 3);
       _controller.nextPage(
         duration: _pageSpeed,
         curve: Curves.linear,
@@ -199,7 +216,7 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
     if (_controller.page.toInt() > 0) {
       _pageNotifier.value -= 1.0;
       _duration = widget.children[_pageNotifier.value.toInt()].duration ??
-          Duration(seconds: 3);
+          const Duration(seconds: 3);
       _controller.previousPage(
         duration: _pageSpeed,
         curve: Curves.linear,
@@ -223,7 +240,7 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
             },
             onPageChanged: (idx) {
               _progressValue = 0;
-              for (int i = 0; i < widget.children.length; i++) {
+              for (var i = 0; i < widget.children.length; i++) {
                 if (i < idx) {
                   widget.children[i].shown = true;
                 } else {
@@ -234,60 +251,71 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
             },
             physics: const NeverScrollableScrollPhysics(),
           ),
-          SafeArea(
-            child: Padding(
-              padding: EdgeInsets.only(top: 10, left: 10, right: 10),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: Row(
-                  children: widget.children
-                      .map(
-                        (e) => Expanded(
-                          child: Container(
-                            padding: EdgeInsets.only(right: 1),
-                            child: StoryProgressIndicator(
-                              widget.children[value.toInt()].getWidget().key ==
-                                      e.getWidget().key
-                                  ? widget.children[value.toInt()].shown
-                                      ? 1
-                                      : _progressValue
-                                  : e.shown
-                                      ? 1
-                                      : 0,
-                              indicatorHeight: 3,
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            heightFactor: 1,
-            child: SizedBox(
-              width: MediaQuery.of(context).size.width / 2,
-              child: GestureDetector(
-                onTap: () {
-                  _next();
-                },
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            heightFactor: 1,
-            child: SizedBox(
-              width: MediaQuery.of(context).size.width / 2,
-              child: GestureDetector(
-                onTap: () {
-                  _back();
-                },
-              ),
-            ),
-          ),
+          widget.showProgressBar
+              ? SafeArea(
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.only(top: 10, left: 10, right: 10),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: Row(
+                        children: widget.children
+                            .map(
+                              (e) => Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.only(right: 1),
+                                  child: StoryProgressIndicator(
+                                    widget.children[value.toInt()]
+                                                .getWidget()
+                                                .key ==
+                                            e.getWidget().key
+                                        ? widget.children[value.toInt()].shown
+                                            ? 1
+                                            : _progressValue
+                                        : e.shown
+                                            ? 1
+                                            : 0,
+                                    indicatorHeight: 3,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                  ),
+                )
+              : const SizedBox(height: 0),
+          widget.enablelLeftBack
+              ? Align(
+                  alignment: Alignment.centerRight,
+                  heightFactor: 1,
+                  child: SizedBox(
+                    width: MediaQuery.of(context).size.width / 2,
+                    child: GestureDetector(
+                      onTap: () {
+                        _next();
+                      },
+                    ),
+                  ),
+                )
+              : const SizedBox(height: 0),
+          widget.enablelRightNext
+              ? Align(
+                  alignment: Alignment.centerLeft,
+                  heightFactor: 1,
+                  child: SizedBox(
+                    width: MediaQuery.of(context).size.width / 2,
+                    child: GestureDetector(
+                      onTap: () {
+                        _back();
+                      },
+                    ),
+                  ),
+                )
+              : const SizedBox(height: 0),
+          widget.children[value.toInt()].layerWidget ??
+              const SizedBox(height: 0),
         ],
       ),
     );
@@ -391,27 +419,31 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
 /// }
 /// ```
 class IgStories extends StatefulWidget {
-  final List<IgStory> children;
-  final IgManager manager;
-
   IgStories({
     Key key,
     @required this.children,
     @required this.manager,
+    this.startIndex = 0,
   })  : assert(children.isNotEmpty),
         super(key: key);
+
+  final List<IgStory> children;
+  final IgManager manager;
+  final double startIndex;
 
   @override
   _IgStoriesState createState() => _IgStoriesState();
 }
 
 class _IgStoriesState extends State<IgStories> {
-  PageController _controller = PageController();
-  ValueNotifier<double> _pageNotifier = ValueNotifier(0.0);
+  PageController _controller;
+  ValueNotifier<double> _pageNotifier;
 
   @override
   void initState() {
     super.initState();
+    _controller = PageController(initialPage: widget.startIndex.toInt());
+    _pageNotifier = ValueNotifier(widget.startIndex);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controller.addListener(_listener);
     });
@@ -421,13 +453,13 @@ class _IgStoriesState extends State<IgStories> {
           switch (event) {
             case IgPlayState.next:
               _controller.nextPage(
-                duration: Duration(milliseconds: 400),
+                duration: const Duration(milliseconds: 400),
                 curve: Curves.easeInOut,
               );
               break;
             case IgPlayState.back:
               _controller.previousPage(
-                duration: Duration(milliseconds: 400),
+                duration: const Duration(milliseconds: 400),
                 curve: Curves.easeInOut,
               );
               break;
@@ -483,8 +515,9 @@ enum IgPlayState {
 }
 
 class IgManager {
+  IgManager() : controller = StreamController<IgPlayState>.broadcast();
+
   final StreamController<IgPlayState> controller;
-  IgManager() : this.controller = StreamController<IgPlayState>.broadcast();
 
   void play() {
     controller.sink.add(IgPlayState.play);
@@ -512,16 +545,20 @@ class IgManager {
 }
 
 class IgChild {
-  final Widget child;
-  final Duration duration;
-
-  bool shown = false;
-
-  IgChild({@required child, this.duration})
-      : this.child = SizedBox(
+  IgChild({
+    @required Widget child,
+    this.duration,
+    this.layerWidget,
+  }) : child = SizedBox(
           key: UniqueKey(),
           child: child,
         );
+
+  final Widget child;
+  final Duration duration;
+  final Widget layerWidget;
+
+  bool shown = false;
 
   Widget getWidget() {
     return child;
@@ -533,12 +570,6 @@ num degToRad(num deg) => deg * (pi / 180.0);
 num radToDeg(num rad) => rad * (180.0 / pi);
 
 class CubeWidget extends StatelessWidget {
-  final int index;
-
-  final double pageNotifier;
-
-  final Widget child;
-
   const CubeWidget({
     Key key,
     @required this.index,
@@ -546,15 +577,21 @@ class CubeWidget extends StatelessWidget {
     @required this.child,
   }) : super(key: key);
 
+  final int index;
+
+  final double pageNotifier;
+
+  final Widget child;
+
   @override
   Widget build(BuildContext context) {
     final isLeaving = (index - pageNotifier) < 0;
-    final t = (index - pageNotifier);
+    final t = index - pageNotifier;
     final rotationY = lerpDouble(0, 45, t);
-    final opacity = lerpDouble(0, 1, t.abs()).clamp(0.0, 1.0);
+    final opacity = lerpDouble(0, 1, t.abs()).clamp(0.0, 1.0).toDouble();
     final transform = Matrix4.identity();
     transform.setEntry(3, 2, 0.003);
-    transform.rotateY(-degToRad(rotationY));
+    transform.rotateY(-degToRad(rotationY).toDouble());
     return Transform(
       alignment: isLeaving ? Alignment.centerRight : Alignment.centerLeft,
       transform: transform,
@@ -583,46 +620,46 @@ class CubeWidget extends StatelessWidget {
 
 // Refs: https://github.com/blackmann/story_view
 class StoryProgressIndicator extends StatelessWidget {
-  final double value;
-  final double indicatorHeight;
-
-  StoryProgressIndicator(
+  const StoryProgressIndicator(
     this.value, {
     this.indicatorHeight = 5,
   }) : assert(indicatorHeight != null && indicatorHeight > 0,
-            "[indicatorHeight] should not be null or less than 1");
+            '[indicatorHeight] should not be null or less than 1');
+
+  final double value;
+  final double indicatorHeight;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
       size: Size.fromHeight(
-        this.indicatorHeight,
+        indicatorHeight,
       ),
       foregroundPainter: IndicatorOval(
         Colors.white.withOpacity(0.8),
-        this.value,
+        value,
       ),
       painter: IndicatorOval(
         Colors.white.withOpacity(0.4),
-        1.0,
+        1,
       ),
     );
   }
 }
 
 class IndicatorOval extends CustomPainter {
+  IndicatorOval(this.color, this.widthFactor);
+
   final Color color;
   final double widthFactor;
 
-  IndicatorOval(this.color, this.widthFactor);
-
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = this.color;
+    final paint = Paint()..color = color;
     canvas.drawRRect(
         RRect.fromRectAndRadius(
-            Rect.fromLTWH(0, 0, size.width * this.widthFactor, size.height),
-            Radius.circular(3)),
+            Rect.fromLTWH(0, 0, size.width * widthFactor, size.height),
+            const Radius.circular(3)),
         paint);
   }
 

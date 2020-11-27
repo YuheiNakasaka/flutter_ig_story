@@ -1,6 +1,6 @@
 name: ig_story
 description: Stories like Instagram.
-version: 0.0.2
+version: 0.0.3
 homepage: https://github.com/YuheiNakasaka/flutter_ig_story
 
 environment:
