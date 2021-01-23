@@ -101,6 +101,7 @@ class IgStory extends StatefulWidget {
     this.enablelLeftBack = true,
     this.enablelRightNext = true,
     this.showProgressBar = true,
+    this.startIndex = 0,
   })  : assert(children.isNotEmpty),
         super(key: key);
 
@@ -110,23 +111,34 @@ class IgStory extends StatefulWidget {
   final bool enablelLeftBack;
   final bool enablelRightNext;
   final bool showProgressBar;
+  final double startIndex;
 
   @override
   _IgStoryState createState() => _IgStoryState();
 }
 
 class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
-  final PageController _controller = PageController();
+  PageController _controller;
   AnimationController _animationController;
   Animation<double> _currentAnimation;
-  final ValueNotifier<double> _pageNotifier = ValueNotifier(0.0);
-  double _progressValue = 0.0;
+  ValueNotifier<double> _pageNotifier;
+  double _progressValue;
   Duration _duration;
   // almost no animation
   final Duration _pageSpeed = const Duration(milliseconds: 1);
 
   @override
   void initState() {
+    _pageNotifier = ValueNotifier(widget.startIndex);
+    _progressValue = widget.startIndex;
+    _controller = PageController(initialPage: widget.startIndex.toInt());
+    for (var i = 0; i < widget.children.length; i++) {
+      if (i < widget.startIndex.toInt()) {
+        widget.children[i].shown = true;
+      } else {
+        widget.children[i].shown = false;
+      }
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controller.addListener(_listener);
       _play();
@@ -151,7 +163,7 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
 
     final child = widget.children[_pageNotifier.value.toInt()];
 
-    _duration = child.duration ?? const Duration(seconds: 6);
+    _duration ??= child.duration ?? const Duration(seconds: 6);
 
     _animationController =
         AnimationController(duration: _duration, vsync: this);
@@ -202,7 +214,7 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
   void _next() {
     if (widget.children.length - 1 > _controller.page.toInt()) {
       _duration = widget.children[_pageNotifier.value.toInt() + 1].duration ??
-          const Duration(seconds: 3);
+          const Duration(seconds: 6);
       _controller.nextPage(
         duration: _pageSpeed,
         curve: Curves.linear,
@@ -216,7 +228,7 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
     if (_controller.page.toInt() > 0) {
       _pageNotifier.value -= 1.0;
       _duration = widget.children[_pageNotifier.value.toInt()].duration ??
-          const Duration(seconds: 3);
+          const Duration(seconds: 6);
       _controller.previousPage(
         duration: _pageSpeed,
         curve: Curves.linear,
@@ -287,11 +299,12 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
                 )
               : const SizedBox(height: 0),
           widget.enablelLeftBack
-              ? Align(
-                  alignment: Alignment.centerRight,
-                  heightFactor: 1,
+              ? Positioned(
+                  top: 90,
+                  right: 0,
                   child: SizedBox(
                     width: MediaQuery.of(context).size.width / 2,
+                    height: MediaQuery.of(context).size.height,
                     child: GestureDetector(
                       onTap: () {
                         _next();
@@ -301,11 +314,12 @@ class _IgStoryState extends State<IgStory> with TickerProviderStateMixin {
                 )
               : const SizedBox(height: 0),
           widget.enablelRightNext
-              ? Align(
-                  alignment: Alignment.centerLeft,
-                  heightFactor: 1,
+              ? Positioned(
+                  top: 90,
+                  left: 0,
                   child: SizedBox(
                     width: MediaQuery.of(context).size.width / 2,
+                    height: MediaQuery.of(context).size.height,
                     child: GestureDetector(
                       onTap: () {
                         _back();
@@ -424,12 +438,14 @@ class IgStories extends StatefulWidget {
     @required this.children,
     @required this.manager,
     this.startIndex = 0,
+    this.onCompleted,
   })  : assert(children.isNotEmpty),
         super(key: key);
 
   final List<IgStory> children;
   final IgManager manager;
   final double startIndex;
+  final VoidCallback onCompleted;
 
   @override
   _IgStoriesState createState() => _IgStoriesState();
@@ -452,10 +468,16 @@ class _IgStoriesState extends State<IgStories> {
         widget.manager.controller.stream.listen((IgPlayState event) {
           switch (event) {
             case IgPlayState.next:
-              _controller.nextPage(
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeInOut,
-              );
+              if (widget.children.length - 1 == _controller.page) {
+                if (widget.onCompleted != null) {
+                  widget.onCompleted();
+                }
+              } else {
+                _controller.nextPage(
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                );
+              }
               break;
             case IgPlayState.back:
               _controller.previousPage(
@@ -485,7 +507,9 @@ class _IgStoriesState extends State<IgStories> {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<double>(
       valueListenable: _pageNotifier,
-      builder: (_, value, child) => Container(
+      builder: (_, value, child) => SizedBox(
+        width: MediaQuery.of(context).size.width,
+        height: MediaQuery.of(context).size.height,
         child: PageView.builder(
           controller: _controller,
           itemCount: widget.children.length,

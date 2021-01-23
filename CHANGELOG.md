@@ -9,3 +9,7 @@
 ## [0.0.3]
 
 * Add some options
+
+## [0.0.4]
+
+* Add some options
